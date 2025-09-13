@@ -1,0 +1,293 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                          String                       @id @default(cuid())
+  name                        String
+  email                       String?
+  image                       String?
+  role                        UserRole                     @default(CORE_CONTRIBUTOR)
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  walletAddress               String?
+  status                      UserAvailabilityStatus?      @default(AVAILABLE)
+  reputation                  Int                          @default(0)
+  fullname                    String?                      @db.VarChar(255)
+  skills                      String?
+  country                     String?                      @db.VarChar(255)
+  languages                   String?
+  comments                    Comment[]
+  consensusComments           ConsensusComment[]
+  consensusVotes              ConsensusVote[]
+  resolvedObjections          Objection[]
+  professionalProfile         ProfessionalProfile?
+  proposals                   Proposal[]
+
+  socialLinks                 SocialLinks?
+  votes                       Vote[]
+  joinRequests                WorkGroupJoinRequest[]
+  workGroups                  WorkGroupMember[]
+  workgroups                  WorkGroup[]                  @relation("UserWorkgroups")
+}
+
+model ProfessionalProfile {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  tagline    String?  @db.VarChar(255)
+  bio        String?
+  experience String?
+  linkCv     String?  @db.VarChar(2048)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SocialLinks {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  facebook  String?  @db.VarChar(2048)
+  linkedin  String?  @db.VarChar(2048)
+  github    String?  @db.VarChar(2048)
+  x         String?  @db.VarChar(2048)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Proposal {
+  id            String         @id @default(cuid())
+  title         String
+  description   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  expiresAt     DateTime
+  status        ProposalStatus @default(IN_REVIEW)
+  positiveVotes Int            @default(0)
+  negativeVotes Int            @default(0)
+  abstainVotes  Int            @default(0)
+  authorId      String
+  workgroupId   String?
+  comments      Comment[]
+  author        User           @relation(fields: [authorId], references: [id])
+  workgroup     WorkGroup?     @relation(fields: [workgroupId], references: [id])
+  votes         Vote[]
+  attachment    String?
+  
+  // Nuevos campos
+  proposalType  String         @default("COMMUNITY_PROPOSAL")
+  budgetItems   Json?          // Array de items presupuestarios
+  workGroupIds  String[]       // Array de IDs de workgroups asociados
+  consensusDate DateTime?      // Fecha cuando se alcanzó consenso
+  quarter       String?        // Trimestre para Quarterly Report (Q1, Q2, Q3, Q4)
+  year          Int?           // Año para Quarterly Report
+  links         Json?          // Array de links relevantes
+
+  @@index([authorId])
+  @@index([workgroupId])
+}
+
+model Vote {
+  id         String   @id @default(cuid())
+  type       VoteType
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  userId     String
+  proposalId String
+  // Optional comment associated with the vote
+  comment    String?
+  proposal   Proposal @relation(fields: [proposalId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, proposalId])
+  @@index([userId])
+  @@index([proposalId])
+}
+
+model Comment {
+  id         String    @id @default(cuid())
+  content    String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  userId     String
+  proposalId String
+  parentId   String?   // ID del comentario padre (para respuestas)
+  proposal   Proposal  @relation(fields: [proposalId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
+  
+  // Relaciones para respuestas
+  parent     Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies    Comment[] @relation("CommentReplies")
+
+  @@index([userId])
+  @@index([proposalId])
+  @@index([parentId])
+}
+
+model WorkGroup {
+  id                  String                 @id @default(uuid())
+  name                String                 @unique
+  type                String
+  dateOfCreation      DateTime
+  status              String
+  missionStatement    String
+  goalsAndFocus       String[]
+  totalMembers        String
+  roles               String[]
+  memberDirectoryLink String
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  proposals           Proposal[]
+
+  joinRequests        WorkGroupJoinRequest[]
+  members             WorkGroupMember[]
+  users               User[]                 @relation("UserWorkgroups")
+}
+
+model WorkGroupMember {
+  id          String    @id @default(uuid())
+  userId      String
+  workGroupId String
+  role        String
+  joinedAt    DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+  workGroup   WorkGroup @relation(fields: [workGroupId], references: [id])
+}
+
+model WorkGroupJoinRequest {
+  id          String    @id @default(uuid())
+  userId      String
+  workGroupId String
+  status      String
+  message     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id])
+  workGroup   WorkGroup @relation(fields: [workGroupId], references: [id])
+}
+
+
+
+
+
+
+
+
+
+model ConsensusVote {
+  id        String            @id @default(uuid())
+  userId    String
+  voteType  ConsensusVoteType
+  comment   String
+  roundId   String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  round     VotingRound       @relation(fields: [roundId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
+  objection Objection?
+
+  @@unique([userId, roundId])
+  @@index([roundId])
+}
+
+model ConsensusComment {
+  id              String             @id @default(uuid())
+  userId          String
+  parentCommentId String?
+  content         String
+  likes           String[]
+  dislikes        String[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  parentComment   ConsensusComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies         ConsensusComment[] @relation("CommentReplies")
+
+  user            User               @relation(fields: [userId], references: [id])
+
+  @@index([parentCommentId])
+}
+
+model Objection {
+  id           String          @id @default(uuid())
+  voteId       String          @unique
+  status       ObjectionStatus @default(PENDIENTE)
+  resolvedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  resolvedBy   User?           @relation(fields: [resolvedById], references: [id])
+  vote         ConsensusVote   @relation(fields: [voteId], references: [id])
+
+  @@index([status])
+}
+
+model VotingRound {
+  id          String            @id @default(uuid())
+  roundNumber Int
+  status      VotingRoundStatus @default(ACTIVA)
+  startedAt   DateTime          @default(now())
+  endedAt     DateTime?
+  votes       ConsensusVote[]
+
+  @@index([status])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  CORE_CONTRIBUTOR
+}
+
+enum UserAvailabilityStatus {
+  AVAILABLE
+  BUSY
+  VERY_BUSY
+}
+
+enum ProposalStatus {
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum VoteType {
+  POSITIVE
+  NEGATIVE
+  ABSTAIN
+}
+
+enum ConsensusStatus {
+  PENDING
+  IN_CONSENSUS
+  CONSENSED
+}
+
+enum ConsensusVoteType {
+  A_FAVOR
+  EN_CONTRA
+  OBJETAR
+  ABSTENERSE
+}
+
+enum ObjectionStatus {
+  PENDIENTE
+  VALIDA
+  INVALIDA
+}
+
+enum VotingRoundStatus {
+  ACTIVA
+  CERRADA
+  CONSENSADA
+}
